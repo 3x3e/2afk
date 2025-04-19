@@ -1,11 +1,11 @@
-require('dotenv').config(); // لتحميل المتغيرات من ملف .env
+require('dotenv').config();
 const { Client } = require('discord.js-selfbot-v13');
-const { joinVoiceChannel } = require('@discordjs/voice');
-const express = require('express'); // <-- إضافة Express
+const { joinVoiceChannel, getVoiceConnection, VoiceConnectionStatus } = require('@discordjs/voice');
+const express = require('express');
 const app = express();
 const port = process.env.PORT || 3000;
 
-// سيرفر وهمي لـ Render
+// Express سيرفر وهمي لـ Render
 app.get('/', (req, res) => {
   res.send('Bot is running!');
 });
@@ -17,7 +17,12 @@ const client = new Client();
 
 client.on('ready', async () => {
   console.log(`${client.user.username} is ready!`);
+});
 
+client.on('messageCreate', async (message) => {
+  if (message.author.id !== client.user.id) return; // بس يستقبل أوامر منك
+
+  const content = message.content.toLowerCase();
   const channelId = process.env.CHANNEL_ID;
   const guildId = process.env.GUILD_ID;
 
@@ -26,11 +31,17 @@ client.on('ready', async () => {
     return;
   }
 
-  setInterval(async () => {
+  if (content === '!join') {
+    const connection = getVoiceConnection(guildId);
+    if (connection && connection.state.status !== VoiceConnectionStatus.Disconnected) {
+      message.channel.send('❌ البوت داخل الروم فعليًا!');
+      return;
+    }
+
     try {
       const channel = await client.channels.fetch(channelId);
       if (!channel) {
-        console.error('Channel not found.');
+        message.channel.send('❌ لم يتم العثور على الروم.');
         return;
       }
 
@@ -41,10 +52,31 @@ client.on('ready', async () => {
         selfDeaf: true,
         adapterCreator: channel.guild.voiceAdapterCreator,
       });
+
+      message.channel.send('✅ تم دخول الروم بنجاح');
+      console.log('✅ تم دخول الروم');
     } catch (error) {
-      console.error('Error joining voice channel:', error.message);
+      console.error('خطأ في دخول الروم:', error.message);
+      message.channel.send('❌ حدث خطأ أثناء محاولة الدخول.');
     }
-  }, 1000); // تحديث كل ثانية
+  }
+
+  if (content === '!leave') {
+    const connection = getVoiceConnection(guildId);
+    if (!connection) {
+      message.channel.send('❌ البوت غير متصل بالروم.');
+      return;
+    }
+
+    try {
+      connection.destroy();
+      message.channel.send('✅ تم الخروج من الروم');
+      console.log('✅ تم الخروج من الروم');
+    } catch (error) {
+      console.error('خطأ في الخروج من الروم:', error.message);
+      message.channel.send('❌ حدث خطأ أثناء محاولة الخروج.');
+    }
+  }
 });
 
 client.login(process.env.TOKEN);
