@@ -5,6 +5,7 @@ const express = require('express');
 const app = express();
 const port = process.env.PORT || 3000;
 
+// Express سيرفر وهمي لـ Render
 app.get('/', (req, res) => {
   res.send('Bot is running!');
 });
@@ -21,8 +22,8 @@ client.on('ready', async () => {
 client.on('messageCreate', async (message) => {
   if (message.author.id !== client.user.id) return;
 
-  const args = message.content.trim().split(/ +/);
-  const command = args.shift().toLowerCase();
+  const args = message.content.trim().split(/ +/g);
+  const command = args[0].toLowerCase();
 
   const guildId = process.env.GUILD_ID;
   if (!guildId) {
@@ -31,9 +32,10 @@ client.on('messageCreate', async (message) => {
   }
 
   if (command === '!join') {
-    const channelId = args[0];
+    let channelId = args[1] || process.env.CHANNEL_ID; // ياخذ من الأمر أو من env إذا مافي
+
     if (!channelId) {
-      message.channel.send('❌ الرجاء كتابة ID الروم بعد الأمر.');
+      message.channel.send('❌ لم يتم توفير ID للروم ولا يوجد ID افتراضي في .env');
       return;
     }
 
@@ -45,7 +47,7 @@ client.on('messageCreate', async (message) => {
 
     try {
       const channel = await client.channels.fetch(channelId);
-      if (!channel || channel.type !== 2) { // type 2 = voice channel
+      if (!channel || channel.type !== 2) {
         message.channel.send('❌ لم يتم العثور على روم صوتي بهذا الـ ID.');
         return;
       }
@@ -58,7 +60,7 @@ client.on('messageCreate', async (message) => {
         adapterCreator: channel.guild.voiceAdapterCreator,
       });
 
-      message.channel.send(`✅ تم دخول الروم: <#${channel.id}>`);
+      message.channel.send(`✅ تم دخول الروم <#${channel.id}> بنجاح`);
       console.log('✅ تم دخول الروم');
     } catch (error) {
       console.error('خطأ في دخول الروم:', error.message);
@@ -69,7 +71,7 @@ client.on('messageCreate', async (message) => {
   if (command === '!leave') {
     const connection = getVoiceConnection(guildId);
     if (!connection) {
-      message.channel.send('❌ البوت غير متصل بأي روم.');
+      message.channel.send('❌ البوت غير متصل بالروم.');
       return;
     }
 
