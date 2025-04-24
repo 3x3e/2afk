@@ -5,7 +5,6 @@ const express = require('express');
 const app = express();
 const port = process.env.PORT || 3000;
 
-// Express سيرفر وهمي لـ Render
 app.get('/', (req, res) => {
   res.send('Bot is running!');
 });
@@ -20,18 +19,24 @@ client.on('ready', async () => {
 });
 
 client.on('messageCreate', async (message) => {
-  if (message.author.id !== client.user.id) return; // بس يستقبل أوامر منك
+  if (message.author.id !== client.user.id) return;
 
-  const content = message.content.toLowerCase();
-  const channelId = process.env.CHANNEL_ID;
+  const args = message.content.trim().split(/ +/);
+  const command = args.shift().toLowerCase();
+
   const guildId = process.env.GUILD_ID;
-
-  if (!channelId || !guildId) {
-    console.error('Missing CHANNEL_ID or GUILD_ID in .env file.');
+  if (!guildId) {
+    console.error('Missing GUILD_ID in .env file.');
     return;
   }
 
-  if (content === '!join') {
+  if (command === '!join') {
+    const channelId = args[0];
+    if (!channelId) {
+      message.channel.send('❌ الرجاء كتابة ID الروم بعد الأمر.');
+      return;
+    }
+
     const connection = getVoiceConnection(guildId);
     if (connection && connection.state.status !== VoiceConnectionStatus.Disconnected) {
       message.channel.send('❌ البوت داخل الروم فعليًا!');
@@ -40,8 +45,8 @@ client.on('messageCreate', async (message) => {
 
     try {
       const channel = await client.channels.fetch(channelId);
-      if (!channel) {
-        message.channel.send('❌ لم يتم العثور على الروم.');
+      if (!channel || channel.type !== 2) { // type 2 = voice channel
+        message.channel.send('❌ لم يتم العثور على روم صوتي بهذا الـ ID.');
         return;
       }
 
@@ -53,7 +58,7 @@ client.on('messageCreate', async (message) => {
         adapterCreator: channel.guild.voiceAdapterCreator,
       });
 
-      message.channel.send('✅ تم دخول الروم بنجاح');
+      message.channel.send(`✅ تم دخول الروم: <#${channel.id}>`);
       console.log('✅ تم دخول الروم');
     } catch (error) {
       console.error('خطأ في دخول الروم:', error.message);
@@ -61,10 +66,10 @@ client.on('messageCreate', async (message) => {
     }
   }
 
-  if (content === '!leave') {
+  if (command === '!leave') {
     const connection = getVoiceConnection(guildId);
     if (!connection) {
-      message.channel.send('❌ البوت غير متصل بالروم.');
+      message.channel.send('❌ البوت غير متصل بأي روم.');
       return;
     }
 
