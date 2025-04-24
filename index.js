@@ -22,20 +22,21 @@ client.on('ready', async () => {
 client.on('messageCreate', async (message) => {
   if (message.author.id !== client.user.id) return;
 
-  const args = message.content.trim().split(/ +/g);
-  const command = args[0].toLowerCase();
-
+  const content = message.content.toLowerCase().trim();
   const guildId = process.env.GUILD_ID;
+
   if (!guildId) {
-    console.error('Missing GUILD_ID in .env file.');
+    console.error('❌ Missing GUILD_ID in .env file.');
     return;
   }
 
-  if (command === '!join') {
-    let channelId = args[1] || process.env.CHANNEL_ID; // ياخذ من الأمر أو من env إذا مافي
+  // أمر الدخول للروم الصوتي
+  if (content.startsWith('!join')) {
+    const args = content.split(' ');
+    const customChannelId = args[1] || process.env.CHANNEL_ID;
 
-    if (!channelId) {
-      message.channel.send('❌ لم يتم توفير ID للروم ولا يوجد ID افتراضي في .env');
+    if (!customChannelId) {
+      message.channel.send('❌ لم يتم تحديد ID الروم الصوتي.');
       return;
     }
 
@@ -46,9 +47,9 @@ client.on('messageCreate', async (message) => {
     }
 
     try {
-      const channel = await client.channels.fetch(channelId);
+      const channel = await client.channels.fetch(customChannelId);
       if (!channel || channel.type !== 2) {
-        message.channel.send('❌ لم يتم العثور على روم صوتي بهذا الـ ID.');
+        message.channel.send(`❌ لم يتم العثور على روم صوتي بهذا الـ ID: ${customChannelId}`);
         return;
       }
 
@@ -60,15 +61,16 @@ client.on('messageCreate', async (message) => {
         adapterCreator: channel.guild.voiceAdapterCreator,
       });
 
-      message.channel.send(`✅ تم دخول الروم <#${channel.id}> بنجاح`);
-      console.log('✅ تم دخول الروم');
+      message.channel.send('✅ تم دخول الروم بنجاح');
+      console.log(`✅ دخل الروم: ${channel.name}`);
     } catch (error) {
-      console.error('خطأ في دخول الروم:', error.message);
-      message.channel.send('❌ حدث خطأ أثناء محاولة الدخول.');
+      console.error('❌ Error joining voice channel:', error);
+      message.channel.send(`❌ حدث خطأ أثناء محاولة الدخول: ${error.message}`);
     }
   }
 
-  if (command === '!leave') {
+  // أمر الخروج من الروم الصوتي
+  if (content === '!leave') {
     const connection = getVoiceConnection(guildId);
     if (!connection) {
       message.channel.send('❌ البوت غير متصل بالروم.');
@@ -80,7 +82,7 @@ client.on('messageCreate', async (message) => {
       message.channel.send('✅ تم الخروج من الروم');
       console.log('✅ تم الخروج من الروم');
     } catch (error) {
-      console.error('خطأ في الخروج من الروم:', error.message);
+      console.error('❌ Error leaving voice channel:', error);
       message.channel.send('❌ حدث خطأ أثناء محاولة الخروج.');
     }
   }
