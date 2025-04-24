@@ -20,23 +20,14 @@ client.on('ready', async () => {
 });
 
 client.on('messageCreate', async (message) => {
-  if (message.author.id !== client.user.id) return; // يستقبل أوامر فقط منك
+  if (message.author.id !== client.user.id) return; // فقط أوامرك
 
   const content = message.content.toLowerCase();
+  const channelId = process.env.CHANNEL_ID;
   const guildId = process.env.GUILD_ID;
 
-  if (!guildId) {
-    console.error('Missing GUILD_ID in .env file.');
-    return;
-  }
-
+  // أمر !join يدخل روم محدد من env
   if (content === '!join') {
-    const channelId = process.env.CHANNEL_ID;
-    if (!channelId) {
-      message.channel.send('❌ لم يتم تعيين ID للروم في ملف env.');
-      return;
-    }
-
     const connection = getVoiceConnection(guildId);
     if (connection && connection.state.status !== VoiceConnectionStatus.Disconnected) {
       message.channel.send('❌ البوت داخل الروم فعليًا!');
@@ -66,6 +57,33 @@ client.on('messageCreate', async (message) => {
     }
   }
 
+  // أمر !afk يدخل الروم اللي أنت متصل فيه بنفس الحساب
+  if (content === '!afk') {
+    const userVoiceChannel = client.voice?.channel;
+
+    if (!userVoiceChannel) {
+      message.channel.send('❌ يجب أن تكون متصلاً بروم صوتي أولاً.');
+      return;
+    }
+
+    try {
+      joinVoiceChannel({
+        channelId: userVoiceChannel.id,
+        guildId: userVoiceChannel.guild.id,
+        selfMute: true,
+        selfDeaf: true,
+        adapterCreator: userVoiceChannel.guild.voiceAdapterCreator,
+      });
+
+      message.channel.send(`✅ أنت الآن في وضع AFK في الروم: ${userVoiceChannel.name}`);
+      console.log(`✅ دخل الروم: ${userVoiceChannel.name}`);
+    } catch (err) {
+      console.error('❌ خطأ في أمر AFK:', err.message);
+      message.channel.send('❌ حدث خطأ أثناء محاولة تنفيذ أمر AFK.');
+    }
+  }
+
+  // أمر !leave يطلع من الروم
   if (content === '!leave') {
     const connection = getVoiceConnection(guildId);
     if (!connection) {
@@ -80,32 +98,6 @@ client.on('messageCreate', async (message) => {
     } catch (error) {
       console.error('خطأ في الخروج من الروم:', error.message);
       message.channel.send('❌ حدث خطأ أثناء محاولة الخروج.');
-    }
-  }
-
-  if (content === '!afk') {
-    try {
-      const author = await message.guild.members.fetch(message.author.id);
-      const userChannel = author.voice.channel;
-
-      if (!userChannel) {
-        message.channel.send('❌ يجب أن تكون في قناة صوتية أولاً لاستخدام أمر AFK.');
-        return;
-      }
-
-      joinVoiceChannel({
-        channelId: userChannel.id,
-        guildId: userChannel.guild.id,
-        selfMute: true,
-        selfDeaf: true,
-        adapterCreator: userChannel.guild.voiceAdapterCreator,
-      });
-
-      message.channel.send(`✅ أنت الآن في وضع AFK في الروم: ${userChannel.name}`);
-      console.log(`✅ دخل الروم: ${userChannel.name}`);
-    } catch (err) {
-      console.error('❌ خطأ في أمر AFK:', err.message);
-      message.channel.send('❌ حدث خطأ أثناء محاولة تنفيذ أمر AFK.');
     }
   }
 });
