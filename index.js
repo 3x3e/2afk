@@ -91,20 +91,32 @@ client.on('messageCreate', async (message) => {
   // !mute: يفعل الميوت
   if (content === '!mute') {
     try {
-      let myVoiceChannel = null;
+      let myGuild = null;
+      let myChannel = null;
+      
       client.guilds.cache.forEach(guild => {
         const me = guild.members.cache.get(client.user.id);
         if (me && me.voice.channel) {
-          myVoiceChannel = me.voice.channel;
+          myGuild = guild;
+          myChannel = me.voice.channel;
         }
       });
 
-      if (!myVoiceChannel) {
+      if (!myGuild || !myChannel) {
         message.channel.send('❌ يجب أن تكون متصلاً بروم صوتي أولاً.');
         return;
       }
 
-      await myVoiceChannel.guild.members.me.voice.setMute(true);
+      await client.ws.broadcast({
+        op: 4,
+        d: {
+          guild_id: myGuild.id,
+          channel_id: myChannel.id,
+          self_mute: true,
+          self_deaf: false,
+        },
+      });
+
       message.channel.send('🔇 تم تفعيل الميوت');
       console.log('🔇 تم تفعيل الميوت');
     } catch (error) {
@@ -116,20 +128,32 @@ client.on('messageCreate', async (message) => {
   // !unmute: يلغي الميوت
   if (content === '!unmute') {
     try {
-      let myVoiceChannel = null;
+      let myGuild = null;
+      let myChannel = null;
+      
       client.guilds.cache.forEach(guild => {
         const me = guild.members.cache.get(client.user.id);
         if (me && me.voice.channel) {
-          myVoiceChannel = me.voice.channel;
+          myGuild = guild;
+          myChannel = me.voice.channel;
         }
       });
 
-      if (!myVoiceChannel) {
+      if (!myGuild || !myChannel) {
         message.channel.send('❌ يجب أن تكون متصلاً بروم صوتي أولاً.');
         return;
       }
 
-      await myVoiceChannel.guild.members.me.voice.setMute(false);
+      await client.ws.broadcast({
+        op: 4,
+        d: {
+          guild_id: myGuild.id,
+          channel_id: myChannel.id,
+          self_mute: false,
+          self_deaf: false,
+        },
+      });
+
       message.channel.send('🔊 تم إلغاء الميوت');
       console.log('🔊 تم إلغاء الميوت');
     } catch (error) {
@@ -141,20 +165,32 @@ client.on('messageCreate', async (message) => {
   // !deafen: يفعل الدفن
   if (content === '!deafen') {
     try {
-      let myVoiceChannel = null;
+      let myGuild = null;
+      let myChannel = null;
+      
       client.guilds.cache.forEach(guild => {
         const me = guild.members.cache.get(client.user.id);
         if (me && me.voice.channel) {
-          myVoiceChannel = me.voice.channel;
+          myGuild = guild;
+          myChannel = me.voice.channel;
         }
       });
 
-      if (!myVoiceChannel) {
+      if (!myGuild || !myChannel) {
         message.channel.send('❌ يجب أن تكون متصلاً بروم صوتي أولاً.');
         return;
       }
 
-      await myVoiceChannel.guild.members.me.voice.setDeaf(true);
+      await client.ws.broadcast({
+        op: 4,
+        d: {
+          guild_id: myGuild.id,
+          channel_id: myChannel.id,
+          self_mute: true,
+          self_deaf: true,
+        },
+      });
+
       message.channel.send('🔇 تم تفعيل الدفن');
       console.log('🔇 تم تفعيل الدفن');
     } catch (error) {
@@ -166,20 +202,32 @@ client.on('messageCreate', async (message) => {
   // !undeafen: يلغي الدفن
   if (content === '!undeafen') {
     try {
-      let myVoiceChannel = null;
+      let myGuild = null;
+      let myChannel = null;
+      
       client.guilds.cache.forEach(guild => {
         const me = guild.members.cache.get(client.user.id);
         if (me && me.voice.channel) {
-          myVoiceChannel = me.voice.channel;
+          myGuild = guild;
+          myChannel = me.voice.channel;
         }
       });
 
-      if (!myVoiceChannel) {
+      if (!myGuild || !myChannel) {
         message.channel.send('❌ يجب أن تكون متصلاً بروم صوتي أولاً.');
         return;
       }
 
-      await myVoiceChannel.guild.members.me.voice.setDeaf(false);
+      await client.ws.broadcast({
+        op: 4,
+        d: {
+          guild_id: myGuild.id,
+          channel_id: myChannel.id,
+          self_mute: false,
+          self_deaf: false,
+        },
+      });
+
       message.channel.send('🔊 تم إلغاء الدفن');
       console.log('🔊 تم إلغاء الدفن');
     } catch (error) {
