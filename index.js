@@ -1,11 +1,8 @@
 // استيراد المكتبات باستخدام صيغة import
-import 'dotenv/config'; // طريقة استيراد dotenv في ESM
+import 'dotenv/config'; 
 import { Client } from 'discord.js-selfbot-v13';
 import { Streamer } from '@dank074/discord-video-stream'; 
 import express from 'express';
-
-// لم يتم استخدام @discordjs/voice و fluent-ffmpeg بشكل مباشر في هذا الملف، لكن تم إبقاؤهما في package.json
-// لضمان عمل البث بشكل صحيح، يتم التعامل مع fluent-ffmpeg ضمنياً بواسطة مكتبة Streamer
 
 const app = express();
 const port = process.env.PORT || 3000;
@@ -27,7 +24,6 @@ const streamer = new Streamer(client);
 
 // متغيرات لتتبع حالة الاتصال والبث
 let currentVoiceConnection = null;
-let currentStreamPlayer = null;
 
 client.on('ready', async () => {
     console.log(`البوت: ${client.user.username} جاهز للعمل!`);
@@ -40,6 +36,27 @@ client.on('messageCreate', async (message) => {
     const content = message.content.toLowerCase();
     const channelId = process.env.CHANNEL_ID;
     const guildId = process.env.GUILD_ID;
+
+    // دالة مساعدة لتحديث حالة الميوت/الديفن
+    async function updateVoiceState(deaf, mute) {
+        if (!message.guild || !client.user) return;
+        const member = message.guild.members.cache.get(client.user.id);
+
+        if (member && member.voice.channel) {
+            try {
+                // استخدام Streamer لتحديث حالة الميوت/الديفن
+                await streamer.setDeaf(deaf);
+                await streamer.setMute(mute);
+                return true;
+            } catch (error) {
+                console.error("خطأ في تحديث حالة الصوت:", error);
+                message.channel.send(`❌ خطأ في تحديث حالة الصوت: ${error.message}`);
+                return false;
+            }
+        }
+        message.channel.send('❌ البوت غير متصل بروم صوتي لتغيير حالته.');
+        return false;
+    }
 
     // الأمر !join
     if (content === '!join') {
@@ -98,35 +115,54 @@ client.on('messageCreate', async (message) => {
         }
     }
 
-    // الأمر !screenshare
+    // الأمر !mute (كتم/إلغاء الكتم)
+    if (content === '!mute') {
+        const member = message.guild.members.cache.get(client.user.id);
+        if (member && member.voice.channel) {
+            const targetMuteState = !member.voice.mute; // عكس الحالة الحالية
+            const success = await updateVoiceState(member.voice.deaf, targetMuteState);
+            if (success) {
+                message.channel.send(targetMuteState ? '🔇 تم كتم الصوت.' : '🔈 تم إلغاء كتم الصوت.');
+            }
+        }
+    }
+
+    // الأمر !deafen (عزل/إلغاء العزل)
+    if (content === '!deafen') {
+        const member = message.guild.members.cache.get(client.user.id);
+        if (member && member.voice.channel) {
+            const targetDeafState = !member.voice.deaf; // عكس الحالة الحالية
+            const success = await updateVoiceState(targetDeafState, member.voice.mute);
+            if (success) {
+                message.channel.send(targetDeafState ? '🙉 تم عزل الصوت (Deafen).' : '🔊 تم إلغاء عزل الصوت.');
+            }
+        }
+    }
+
+    // الأمر !screenshare (تم إصلاحه ليستخدم streamer.play)
     if (content === '!screenshare') {
         if (!currentVoiceConnection) {
             message.channel.send('❌ البوت غير متصل بروم صوتي. استخدم !join أو !afk أولاً.');
             return;
         }
         
-        // إيقاف أي بث سابق قبل البدء
-        if (currentStreamPlayer) {
-            currentStreamPlayer.stop();
-            currentStreamPlayer = null;
-        }
-
         try {
-            // إنشاء مشغل البث. يتطلب FFmpeg ليعمل.
-            currentStreamPlayer = streamer.createPlayer(BLACK_SCREEN_VIDEO_URL, currentVoiceConnection.udp);
+            // استخدام streamer.play مباشرة لتشغيل البث
+            // هذه هي الطريقة الجديدة والصحيحة في الإصدارات الأخيرة
+            const streamPlayer = streamer.play(BLACK_SCREEN_VIDEO_URL, currentVoiceConnection);
 
-            currentStreamPlayer.on('start', () => {
+            streamPlayer.on('start', () => {
                 message.channel.send('✅ تم بدء مشاركة الشاشة (Go Live).');
                 console.log('✅ تم بدء البث.');
             });
             
-            currentStreamPlayer.on('error', (error) => {
+            streamPlayer.on('error', (error) => {
                 console.error('خطأ في مشغل البث:', error.message);
-                message.channel.send('❌ خطأ أثناء تشغيل البث. يرجى التحقق من تثبيت FFmpeg.');
+                message.channel.send('❌ خطأ أثناء تشغيل البث. (هل FFmpeg مُثبت؟)');
             });
 
-            currentStreamPlayer.play();
-
+            // لا نحتاج لمتغير عالمي لـ streamPlayer، لأنه سيعمل حتى يتم استدعاء .destroy أو !leave
+            
         } catch (error) {
             console.error('❌ خطأ في أمر Screenshare:', error.message);
             message.channel.send(`❌ حدث خطأ أثناء محاولة مشاركة الشاشة: ${error.message}`);
@@ -135,21 +171,16 @@ client.on('messageCreate', async (message) => {
 
     // الأمر !stopshare
     if (content === '!stopshare') {
-        if (currentStreamPlayer) {
-            currentStreamPlayer.stop();
-            currentStreamPlayer = null;
-            
+        // بما أن streamer.play لا يُعيد مشغلًا يمكن إيقافه بسهولة، سنعتمد على الخروج من الروم أو إنهاء البث.
+        // الحل العملي هو إيقاف الفيديو ثم الخروج والدخول مرة أخرى إن لزم الأمر.
+        if (currentVoiceConnection) {
             // إيقاف الفيديو على اتصال الديسكورد
-            if (currentVoiceConnection) {
-                currentVoiceConnection.setVideo(false); 
-            }
-            
-            message.channel.send('✅ تم إيقاف مشاركة الشاشة.');
+            currentVoiceConnection.setVideo(false); 
+            message.channel.send('✅ تم إيقاف مشاركة الشاشة. إذا لم يتوقف البث، قد تحتاج إلى !leave ثم !join.');
         } else {
             message.channel.send('❌ لا يوجد بث شاشة فعال لإيقافه.');
         }
     }
-
 
     // الأمر !leave
     if (content === '!leave') {
@@ -158,12 +189,6 @@ client.on('messageCreate', async (message) => {
             return;
         }
         
-        // إيقاف البث إن وجد
-        if (currentStreamPlayer) {
-            currentStreamPlayer.stop();
-            currentStreamPlayer = null;
-        }
-
         try {
             // استخدام وظيفة destroy للخروج من الروم
             await currentVoiceConnection.destroy();
