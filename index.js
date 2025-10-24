@@ -29,11 +29,40 @@ client.on('ready', async () => {
     console.log(`البوت: ${client.user.username} جاهز للعمل!`);
 });
 
+// دالة مساعدة عامة للعثور على الروم الصوتي الذي يتواجد فيه المستخدم (السيلف بوت)
+function getBotVoiceState() {
+    if (!client.user) return null;
+    
+    // البحث في جميع السيرفرات المتصل بها
+    for (const guild of client.guilds.cache.values()) {
+        const member = guild.members.cache.get(client.user.id);
+        if (member && member.voice.channel) {
+            // إرجاع كائن العضو وحالة الاتصال
+            return { member, connection: currentVoiceConnection };
+        }
+    }
+    return null;
+}
+
+// دالة مساعدة جديدة: للعثور على الروم الصوتي للمستخدم (أنت)
+function findUserVoiceChannel() {
+    if (!client.user) return null;
+    
+    // البحث عن المستخدم (السيلف بوت) في كل السيرفرات
+    for (const guild of client.guilds.cache.values()) {
+        const member = guild.members.cache.get(client.user.id);
+        // إذا كان العضو متصلاً بروم صوتي، نُعيد قناة الصوت
+        if (member && member.voice.channel) {
+            return member.voice.channel;
+        }
+    }
+    return null;
+}
+
+
 client.on('messageCreate', async (message) => {
     // تجاهل الرسائل التي لا تأتي من حساب البوت نفسه
     if (message.author.id !== client.user.id) return;
-    
-    // 🆕 تم حذف 'if (!message.guild) return;' للسماح بجميع الأوامر
     
     const content = message.content.toLowerCase();
     const channelId = process.env.CHANNEL_ID;
@@ -41,18 +70,15 @@ client.on('messageCreate', async (message) => {
 
     // دالة مساعدة لتحديث حالة الميوت/الديفن
     async function updateVoiceState(deaf, mute) {
-        // 🆕 يجب أن يكون هناك سيرفر عند استدعاء هذه الدالة
-        if (!message.guild) return false; 
-        
-        const member = message.guild.members.cache.get(client.user.id);
+        const state = getBotVoiceState();
 
-        if (member && member.voice.channel) {
+        if (state) {
             try {
+                // استخدام Streamer لتحديث حالة الميوت/الديفن
                 await streamer.setDeaf(deaf);
                 await streamer.setMute(mute);
                 return true;
             } catch (error) {
-                console.error("خطأ في تحديث حالة الصوت:", error);
                 message.channel.send(`❌ خطأ في تحديث حالة الصوت: ${error.message}`);
                 return false;
             }
@@ -60,14 +86,14 @@ client.on('messageCreate', async (message) => {
         message.channel.send('❌ البوت غير متصل بروم صوتي لتغيير حالته.');
         return false;
     }
-
-    // الأمر !reset: لتصفير حالة الاتصال يدويًا (يعمل في أي مكان)
+    
+    // الأمر !reset
     if (content === '!reset') {
         if (currentVoiceConnection) {
             try {
                 await currentVoiceConnection.destroy();
             } catch (e) {
-                console.log('فشل تدمير الاتصال القديم، سيتم تصفير المتغير فقط.');
+                // تجاهل خطأ التدمير إذا كان الاتصال غير صالح بالفعل
             }
         }
         currentVoiceConnection = null;
@@ -75,7 +101,8 @@ client.on('messageCreate', async (message) => {
         return;
     }
 
-    // الأمر !join (يعمل في أي مكان)
+
+    // الأمر !join
     if (content === '!join') {
         if (currentVoiceConnection) {
             message.channel.send('❌ البوت متصل بالفعل بروم صوتي! إذا لم يكن كذلك، استخدم !reset.');
@@ -84,14 +111,8 @@ client.on('messageCreate', async (message) => {
 
         try {
             const channel = await client.channels.fetch(channelId);
-            if (!channel || channel.type !== 'GUILD_VOICE') {
-                message.channel.send('❌ لم يتم العثور على الروم الصوتي المحدد في .env.');
-                return;
-            }
-            
-            // 🆕 يجب التأكد من وجود guildId قبل الانضمام
-            if (!guildId) {
-                message.channel.send('❌ لم يتم تحديد GUILD_ID في ملف .env.');
+            if (!channel || channel.type !== 'GUILD_VOICE' || !guildId) {
+                message.channel.send('❌ لم يتم العثور على الروم/السيرفر المحدد في .env أو المعلومات غير صحيحة.');
                 return;
             }
             
@@ -99,30 +120,22 @@ client.on('messageCreate', async (message) => {
             currentVoiceConnection = connection;
 
             message.channel.send('✅ تم الاتصال بالروم الصوتي بنجاح.');
-            console.log('✅ تم الانضمام للروم الصوتي.');
         } catch (error) {
-            console.error('خطأ أثناء محاولة الانضمام للروم:', error.message);
-            message.channel.send('❌ حدث خطأ أثناء محاولة الانضمام للروم.');
+            message.channel.send('❌ حدث خطأ أثناء محاولة الانضمام للروم. (تأكد من وجود البوت في السيرفر).');
         }
     }
 
-    // الأمر !afk (يتطلب أن تكون الرسالة داخل سيرفر)
+    // الأمر !afk (يعمل الآن من أي مكان)
     if (content === '!afk') {
-        // 🆕 فحص السيرفر
-        if (!message.guild) {
-            message.channel.send('❌ أمر !afk يتطلب أن تكون في سيرفر.');
-            return;
-        }
-
         if (currentVoiceConnection) {
             message.channel.send('❌ البوت متصل بالفعل بروم صوتي! إذا لم يكن كذلك، استخدم !reset.');
             return;
         }
+        
         try {
-            const senderGuild = client.guilds.cache.get(message.guildId);
-            const me = senderGuild.members.cache.get(client.user.id);
-            const foundChannel = me && me.voice.channel ? me.voice.channel : null;
-
+            // البحث عن الروم الصوتي الذي يتواجد فيه المستخدم (السيلف بوت)
+            const foundChannel = findUserVoiceChannel();
+            
             if (!foundChannel) {
                 message.channel.send('❌ يجب أن تكون متصلاً بروم صوتي أولاً لتشغيل هذا الأمر.');
                 return;
@@ -132,29 +145,24 @@ client.on('messageCreate', async (message) => {
             currentVoiceConnection = connection;
 
             message.channel.send(`✅ تم تفعيل وضع AFK في الروم: ${foundChannel.name}`);
-            console.log(`✅ تفعيل AFK في الروم: ${foundChannel.name}`);
         } catch (err) {
-            console.error('❌ خطأ في أمر AFK:', err.message);
             message.channel.send('❌ حدث خطأ أثناء محاولة تشغيل أمر AFK.');
         }
     }
 
     // أوامر التحكم في الصوت والبث (!mute, !deafen, !screenshare, !stopshare)
     if (content === '!mute' || content === '!deafen' || content === '!screenshare' || content === '!stopshare') {
-        // 🆕 فحص السيرفر لجميع أوامر التحكم الصوتي والبث
-        if (!message.guild) {
-            message.channel.send('❌ هذا الأمر يتطلب أن تكون في سيرفر.');
+        
+        const state = getBotVoiceState();
+        
+        if (!state) {
+            message.channel.send('❌ البوت غير متصل بروم صوتي لتنفيذ هذا الأمر.');
             return;
         }
 
-        const member = message.guild.members.cache.get(client.user.id);
-        const isConnected = member && member.voice.channel;
-
+        const member = state.member;
+        
         if (content === '!mute') {
-            if (!isConnected) {
-                message.channel.send('❌ البوت غير متصل بروم صوتي لتغيير حالته.');
-                return;
-            }
             const targetMuteState = !member.voice.mute; 
             const success = await updateVoiceState(member.voice.deaf, targetMuteState);
             if (success) {
@@ -163,10 +171,6 @@ client.on('messageCreate', async (message) => {
         } 
         
         else if (content === '!deafen') {
-            if (!isConnected) {
-                message.channel.send('❌ البوت غير متصل بروم صوتي لتغيير حالته.');
-                return;
-            }
             const targetDeafState = !member.voice.deaf; 
             const success = await updateVoiceState(targetDeafState, member.voice.mute);
             if (success) {
@@ -175,42 +179,32 @@ client.on('messageCreate', async (message) => {
         } 
         
         else if (content === '!screenshare') {
-            if (!currentVoiceConnection) {
-                message.channel.send('❌ البوت غير متصل بروم صوتي. استخدم !join أو !afk أولاً.');
-                return;
-            }
-            
             try {
+                // استخدام streamer.play مباشرة لتشغيل البث
                 const streamPlayer = streamer.play(BLACK_SCREEN_VIDEO_URL, currentVoiceConnection);
 
                 streamPlayer.on('start', () => {
                     message.channel.send('✅ تم بدء مشاركة الشاشة (Go Live).');
-                    console.log('✅ تم بدء البث.');
                 });
                 
                 streamPlayer.on('error', (error) => {
-                    console.error('خطأ في مشغل البث:', error.message);
                     message.channel.send('❌ خطأ أثناء تشغيل البث. (هل FFmpeg مُثبت؟)');
                 });
                 
             } catch (error) {
-                console.error('❌ خطأ في أمر Screenshare:', error.message);
                 message.channel.send(`❌ حدث خطأ أثناء محاولة مشاركة الشاشة: ${error.message}`);
             }
         } 
         
         else if (content === '!stopshare') {
-            if (currentVoiceConnection) {
-                currentVoiceConnection.setVideo(false); 
-                message.channel.send('✅ تم إيقاف مشاركة الشاشة. إذا لم يتوقف البث، قد تحتاج إلى !leave ثم !join.');
-            } else {
-                message.channel.send('❌ لا يوجد بث شاشة فعال لإيقافه.');
-            }
+            // إيقاف الفيديو على اتصال الديسكورد
+            currentVoiceConnection.setVideo(false); 
+            message.channel.send('✅ تم إيقاف مشاركة الشاشة.');
         }
     }
 
 
-    // الأمر !leave (يعمل في أي مكان)
+    // الأمر !leave
     if (content === '!leave') {
         if (!currentVoiceConnection) {
             message.channel.send('❌ البوت غير متصل بروم صوتي.');
@@ -222,9 +216,8 @@ client.on('messageCreate', async (message) => {
             currentVoiceConnection = null;
 
             message.channel.send('✅ تم الخروج من الروم الصوتي.');
-            console.log('✅ تم الخروج من الروم الصوتي.');
         } catch (error) {
-            console.error('خطأ أثناء الخروج من الروم، سيتم تصفير المتغير:', error.message);
+            // في حالة فشل الخروج، نقوم بتصفير المتغير يدوياً
             currentVoiceConnection = null;
             message.channel.send('❌ حدث خطأ أثناء محاولة الخروج من الروم. تم تصفير الحالة يدوياً. يمكنك الآن استخدام !join.');
         }
