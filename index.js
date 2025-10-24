@@ -1,17 +1,19 @@
-// استيراد المكتبات الضرورية
-require('dotenv').config();
-const { Client } = require('discord.js-selfbot-v13');
-const { Streamer } = require('@dank074/discord-video-stream'); 
+// استيراد المكتبات باستخدام صيغة import
+import 'dotenv/config'; // طريقة استيراد dotenv في ESM
+import { Client } from 'discord.js-selfbot-v13';
+import { Streamer } from '@dank074/discord-video-stream'; 
+import express from 'express';
 
-const express = require('express');
+// لم يتم استخدام @discordjs/voice و fluent-ffmpeg بشكل مباشر في هذا الملف، لكن تم إبقاؤهما في package.json
+// لضمان عمل البث بشكل صحيح، يتم التعامل مع fluent-ffmpeg ضمنياً بواسطة مكتبة Streamer
+
 const app = express();
 const port = process.env.PORT || 3000;
 
 // رابط ملف فيديو لاستخدامه كـ "شاشة سوداء" للبث.
-// (يتطلب FFmpeg لمعالجة هذا الرابط)
 const BLACK_SCREEN_VIDEO_URL = 'http://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4'; 
 
-// إعداد خادم Express للحفاظ على تشغيل البوت على Render
+// إعداد خادم Express
 app.get('/', (req, res) => {
     res.send('البوت يعمل وجاهز!');
 });
@@ -20,7 +22,7 @@ app.listen(port, () => {
 });
 
 const client = new Client();
-// تهيئة عميل Streamer للتعامل مع الاتصال الصوتي والبث
+// تهيئة عميل Streamer
 const streamer = new Streamer(client); 
 
 // متغيرات لتتبع حالة الاتصال والبث
@@ -32,14 +34,14 @@ client.on('ready', async () => {
 });
 
 client.on('messageCreate', async (message) => {
-    // تجاهل الرسائل التي لا تأتي من حساب البوت نفسه (السيلف بوت)
+    // تجاهل الرسائل التي لا تأتي من حساب البوت نفسه
     if (message.author.id !== client.user.id) return;
 
     const content = message.content.toLowerCase();
     const channelId = process.env.CHANNEL_ID;
     const guildId = process.env.GUILD_ID;
 
-    // الأمر !join: يدخل الروم الصوتي المحدد في ملف .env
+    // الأمر !join
     if (content === '!join') {
         if (currentVoiceConnection) {
             message.channel.send('❌ البوت متصل بالفعل بروم صوتي!');
@@ -65,7 +67,7 @@ client.on('messageCreate', async (message) => {
         }
     }
 
-    // الأمر !afk: يدخل الروم الصوتي الذي يتواجد فيه المستخدم حاليًا
+    // الأمر !afk
     if (content === '!afk') {
         if (currentVoiceConnection) {
             message.channel.send('❌ البوت متصل بالفعل بروم صوتي!');
@@ -96,7 +98,7 @@ client.on('messageCreate', async (message) => {
         }
     }
 
-    // الأمر !screenshare: يبدأ بث الشاشة (Go Live)
+    // الأمر !screenshare
     if (content === '!screenshare') {
         if (!currentVoiceConnection) {
             message.channel.send('❌ البوت غير متصل بروم صوتي. استخدم !join أو !afk أولاً.');
@@ -131,7 +133,7 @@ client.on('messageCreate', async (message) => {
         }
     }
 
-    // الأمر !stopshare: يوقف بث الشاشة
+    // الأمر !stopshare
     if (content === '!stopshare') {
         if (currentStreamPlayer) {
             currentStreamPlayer.stop();
@@ -149,7 +151,7 @@ client.on('messageCreate', async (message) => {
     }
 
 
-    // الأمر !leave: يخرج من الروم الصوتي
+    // الأمر !leave
     if (content === '!leave') {
         if (!currentVoiceConnection) {
             message.channel.send('❌ البوت غير متصل بروم صوتي.');
