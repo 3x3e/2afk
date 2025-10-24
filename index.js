@@ -236,6 +236,51 @@ client.on('messageCreate', async (message) => {
     }
   }
 
+  // !move: الانتقال لروم صوتي آخر
+  if (content.startsWith('!move ')) {
+    const targetChannelId = content.split(' ')[1];
+    
+    if (!targetChannelId) {
+      message.channel.send('❌ يرجى كتابة آيدي الروم\nمثال: `!move 123456789`');
+      return;
+    }
+
+    try {
+      const targetChannel = await client.channels.fetch(targetChannelId);
+      
+      if (!targetChannel) {
+        message.channel.send('❌ لم يتم العثور على الروم.');
+        return;
+      }
+
+      if (targetChannel.type !== 'GUILD_VOICE' && targetChannel.type !== 2) {
+        message.channel.send('❌ هذا ليس روم صوتي!');
+        return;
+      }
+
+      // التحقق من الاتصال الحالي
+      const currentConnection = getVoiceConnection(targetChannel.guild.id);
+      if (currentConnection) {
+        currentConnection.destroy();
+      }
+
+      // الدخول للروم الجديد
+      joinVoiceChannel({
+        channelId: targetChannel.id,
+        guildId: targetChannel.guild.id,
+        selfMute: false,
+        selfDeaf: false,
+        adapterCreator: targetChannel.guild.voiceAdapterCreator,
+      });
+
+      message.channel.send(`✅ تم الانتقال إلى الروم: ${targetChannel.name}`);
+      console.log(`✅ تم الانتقال إلى: ${targetChannel.name}`);
+    } catch (error) {
+      console.error('خطأ في الانتقال للروم:', error.message);
+      message.channel.send('❌ حدث خطأ أثناء محاولة الانتقال. تأكد من صحة الآيدي.');
+    }
+  }
+
   // !leave: يخرج من الروم
   if (content === '!leave') {
     const connection = getVoiceConnection(guildId);
