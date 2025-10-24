@@ -32,6 +32,9 @@ client.on('ready', async () => {
 client.on('messageCreate', async (message) => {
     // تجاهل الرسائل التي لا تأتي من حساب البوت نفسه
     if (message.author.id !== client.user.id) return;
+    
+    // 🆕 تحقق من أن الرسالة ليست في الخاص (DM)
+    if (!message.guild) return; 
 
     const content = message.content.toLowerCase();
     const channelId = process.env.CHANNEL_ID;
@@ -39,7 +42,7 @@ client.on('messageCreate', async (message) => {
 
     // دالة مساعدة لتحديث حالة الميوت/الديفن
     async function updateVoiceState(deaf, mute) {
-        if (!message.guild || !client.user) return;
+        // تم نقل فحص السيرفر إلى دالة messageCreate
         const member = message.guild.members.cache.get(client.user.id);
 
         if (member && member.voice.channel) {
@@ -124,6 +127,8 @@ client.on('messageCreate', async (message) => {
             if (success) {
                 message.channel.send(targetMuteState ? '🔇 تم كتم الصوت.' : '🔈 تم إلغاء كتم الصوت.');
             }
+        } else {
+            message.channel.send('❌ البوت غير متصل بروم صوتي لتغيير حالته.');
         }
     }
 
@@ -136,6 +141,8 @@ client.on('messageCreate', async (message) => {
             if (success) {
                 message.channel.send(targetDeafState ? '🙉 تم عزل الصوت (Deafen).' : '🔊 تم إلغاء عزل الصوت.');
             }
+        } else {
+            message.channel.send('❌ البوت غير متصل بروم صوتي لتغيير حالته.');
         }
     }
 
@@ -148,7 +155,6 @@ client.on('messageCreate', async (message) => {
         
         try {
             // استخدام streamer.play مباشرة لتشغيل البث
-            // هذه هي الطريقة الجديدة والصحيحة في الإصدارات الأخيرة
             const streamPlayer = streamer.play(BLACK_SCREEN_VIDEO_URL, currentVoiceConnection);
 
             streamPlayer.on('start', () => {
@@ -160,8 +166,6 @@ client.on('messageCreate', async (message) => {
                 console.error('خطأ في مشغل البث:', error.message);
                 message.channel.send('❌ خطأ أثناء تشغيل البث. (هل FFmpeg مُثبت؟)');
             });
-
-            // لا نحتاج لمتغير عالمي لـ streamPlayer، لأنه سيعمل حتى يتم استدعاء .destroy أو !leave
             
         } catch (error) {
             console.error('❌ خطأ في أمر Screenshare:', error.message);
@@ -171,8 +175,7 @@ client.on('messageCreate', async (message) => {
 
     // الأمر !stopshare
     if (content === '!stopshare') {
-        // بما أن streamer.play لا يُعيد مشغلًا يمكن إيقافه بسهولة، سنعتمد على الخروج من الروم أو إنهاء البث.
-        // الحل العملي هو إيقاف الفيديو ثم الخروج والدخول مرة أخرى إن لزم الأمر.
+        // لـ streamer.play، الحل هو إيقاف الفيديو ثم الخروج والدخول مرة أخرى إن لزم الأمر.
         if (currentVoiceConnection) {
             // إيقاف الفيديو على اتصال الديسكورد
             currentVoiceConnection.setVideo(false); 
