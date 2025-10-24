@@ -1,82 +1,78 @@
+// استيراد المكتبات الضرورية
 require('dotenv').config();
 const { Client } = require('discord.js-selfbot-v13');
-// ⚠️ ملاحظة: تم إزالة @discordjs/voice والاعتماد على discord-stream-client
-const { DiscordStreamClient } = require('discord-stream-client'); 
+const { Streamer } = require('@dank074/discord-video-stream'); 
 
 const express = require('express');
 const app = express();
 const port = process.env.PORT || 3000;
 
-// مسار أو رابط فيديو الشاشة السوداء (يمكنك استبداله بملف صامت لديك)
-// هذا الرابط هو مثال فقط، يجب التأكد من أنه ملف فيديو صامت وقصير
+// رابط ملف فيديو لاستخدامه كـ "شاشة سوداء" للبث.
+// (يتطلب FFmpeg لمعالجة هذا الرابط)
 const BLACK_SCREEN_VIDEO_URL = 'http://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4'; 
 
+// إعداد خادم Express للحفاظ على تشغيل البوت على Render
 app.get('/', (req, res) => {
-    res.send('Bot is running!');
+    res.send('البوت يعمل وجاهز!');
 });
 app.listen(port, () => {
-    console.log(`Express server running on port ${port}`);
+    console.log(`خادم Express يعمل على المنفذ: ${port}`);
 });
 
 const client = new Client();
-// إنشاء عميل البث الذي سيدير الاتصالات
-const StreamClient = new DiscordStreamClient(client);
+// تهيئة عميل Streamer للتعامل مع الاتصال الصوتي والبث
+const streamer = new Streamer(client); 
 
 // متغيرات لتتبع حالة الاتصال والبث
 let currentVoiceConnection = null;
 let currentStreamPlayer = null;
 
 client.on('ready', async () => {
-    console.log(`${client.user.username} is ready!`);
+    console.log(`البوت: ${client.user.username} جاهز للعمل!`);
 });
 
 client.on('messageCreate', async (message) => {
-    // يتجاهل الرسائل التي لا تأتي من البوت نفسه
+    // تجاهل الرسائل التي لا تأتي من حساب البوت نفسه (السيلف بوت)
     if (message.author.id !== client.user.id) return;
 
     const content = message.content.toLowerCase();
     const channelId = process.env.CHANNEL_ID;
     const guildId = process.env.GUILD_ID;
 
-    // !join: يدخل روم من .env
+    // الأمر !join: يدخل الروم الصوتي المحدد في ملف .env
     if (content === '!join') {
         if (currentVoiceConnection) {
-            message.channel.send('❌ The bot is already in a voice channel!');
+            message.channel.send('❌ البوت متصل بالفعل بروم صوتي!');
             return;
         }
 
         try {
             const channel = await client.channels.fetch(channelId);
             if (!channel || channel.type !== 'GUILD_VOICE') {
-                message.channel.send('❌ Voice channel not found.');
+                message.channel.send('❌ لم يتم العثور على الروم الصوتي المحدد.');
                 return;
             }
 
-            // استخدام StreamClient للاتصال (صوت فقط)
-            const connection = await StreamClient.joinVoiceChannel(channel, {
-                selfDeaf: false,
-                selfMute: true,
-                selfVideo: false, // لا تبدأ البث تلقائيا
-            });
+            // الانضمام للروم باستخدام streamer.joinVoice
+            const connection = await streamer.joinVoice(guildId, channelId); 
             currentVoiceConnection = connection;
 
-            message.channel.send('✅ Successfully joined the voice channel.');
-            console.log('✅ Joined voice channel.');
+            message.channel.send('✅ تم الاتصال بالروم الصوتي بنجاح.');
+            console.log('✅ تم الانضمام للروم الصوتي.');
         } catch (error) {
-            console.error('Error joining voice channel:', error.message);
-            message.channel.send('❌ An error occurred while trying to join.');
+            console.error('خطأ أثناء محاولة الانضمام للروم:', error.message);
+            message.channel.send('❌ حدث خطأ أثناء محاولة الانضمام للروم.');
         }
     }
 
-    // !afk: يدخل نفس الروم اللي أنت فيه
+    // الأمر !afk: يدخل الروم الصوتي الذي يتواجد فيه المستخدم حاليًا
     if (content === '!afk') {
         if (currentVoiceConnection) {
-            message.channel.send('❌ The bot is already in a voice channel!');
+            message.channel.send('❌ البوت متصل بالفعل بروم صوتي!');
             return;
         }
         try {
             let foundChannel = null;
-            // البحث عن الروم الذي يتواجد فيه المستخدم الذي أرسل الأمر
             const senderGuild = client.guilds.cache.get(message.guildId);
             const me = senderGuild.members.cache.get(client.user.id);
             if (me && me.voice.channel) {
@@ -84,94 +80,79 @@ client.on('messageCreate', async (message) => {
             }
 
             if (!foundChannel) {
-                message.channel.send('❌ You must be connected to a voice channel first.');
+                message.channel.send('❌ يجب أن تكون متصلاً بروم صوتي أولاً لتشغيل هذا الأمر.');
                 return;
             }
 
-            // استخدام StreamClient للاتصال (صوت فقط)
-            const connection = await StreamClient.joinVoiceChannel(foundChannel, {
-                selfDeaf: false,
-                selfMute: true,
-                selfVideo: false,
-            });
+            // الانضمام للروم باستخدام streamer.joinVoice
+            const connection = await streamer.joinVoice(foundChannel.guild.id, foundChannel.id);
             currentVoiceConnection = connection;
 
-            message.channel.send(`✅ You are now AFK in: ${foundChannel.name}`);
-            console.log(`✅ AFK in: ${foundChannel.name}`);
+            message.channel.send(`✅ تم تفعيل وضع AFK في الروم: ${foundChannel.name}`);
+            console.log(`✅ تفعيل AFK في الروم: ${foundChannel.name}`);
         } catch (err) {
-            console.error('❌ AFK command error:', err.message);
-            message.channel.send('❌ An error occurred while trying to run AFK command.');
+            console.error('❌ خطأ في أمر AFK:', err.message);
+            message.channel.send('❌ حدث خطأ أثناء محاولة تشغيل أمر AFK.');
         }
     }
 
-    // !screenshare: يبدأ بث الشاشة السوداء
+    // الأمر !screenshare: يبدأ بث الشاشة (Go Live)
     if (content === '!screenshare') {
         if (!currentVoiceConnection) {
-            message.channel.send('❌ Bot is not connected to a voice channel. Use !join or !afk first.');
+            message.channel.send('❌ البوت غير متصل بروم صوتي. استخدم !join أو !afk أولاً.');
             return;
         }
         
-        // إيقاف أي بث سابق
+        // إيقاف أي بث سابق قبل البدء
         if (currentStreamPlayer) {
             currentStreamPlayer.stop();
             currentStreamPlayer = null;
         }
 
         try {
-            // 1. إنشاء اتصال بث (مشاركة شاشة)
-            const streamConnection = await currentVoiceConnection.createStream({
-                selfVideo: true, // تفعيل البث
-                selfMute: currentVoiceConnection.selfMute,
-                selfDeaf: currentVoiceConnection.selfDeaf,
-            });
-
-            // 2. إنشاء المشغل وبث ملف الفيديو (يتطلب FFmpeg)
-            currentStreamPlayer = StreamClient.createPlayer(
-                BLACK_SCREEN_VIDEO_URL,
-                streamConnection.udp // استخدام اتصال UDP الخاص بالبث
-            );
+            // إنشاء مشغل البث. يتطلب FFmpeg ليعمل.
+            currentStreamPlayer = streamer.createPlayer(BLACK_SCREEN_VIDEO_URL, currentVoiceConnection.udp);
 
             currentStreamPlayer.on('start', () => {
-                message.channel.send('✅ Started Screen Share (Go Live).');
-                console.log('✅ Started streaming.');
+                message.channel.send('✅ تم بدء مشاركة الشاشة (Go Live).');
+                console.log('✅ تم بدء البث.');
             });
             
             currentStreamPlayer.on('error', (error) => {
-                console.error('Stream Player Error:', error.message);
-                message.channel.send('❌ Error during stream playback. Check FFmpeg installation.');
+                console.error('خطأ في مشغل البث:', error.message);
+                message.channel.send('❌ خطأ أثناء تشغيل البث. يرجى التحقق من تثبيت FFmpeg.');
             });
 
-            // 3. تشغيل المشغل
             currentStreamPlayer.play();
 
         } catch (error) {
-            console.error('❌ Screenshare error:', error.message);
-            message.channel.send(`❌ An error occurred while trying to screenshare: ${error.message}`);
+            console.error('❌ خطأ في أمر Screenshare:', error.message);
+            message.channel.send(`❌ حدث خطأ أثناء محاولة مشاركة الشاشة: ${error.message}`);
         }
     }
 
-    // !stopshare: يوقف بث الشاشة
+    // الأمر !stopshare: يوقف بث الشاشة
     if (content === '!stopshare') {
         if (currentStreamPlayer) {
             currentStreamPlayer.stop();
             currentStreamPlayer = null;
             
-            // إرسال إشارة إيقاف الفيديو عبر الاتصال الصوتي
+            // إيقاف الفيديو على اتصال الديسكورد
             if (currentVoiceConnection) {
                 currentVoiceConnection.setVideo(false); 
             }
             
-            message.channel.send('✅ Screen share stopped.');
+            message.channel.send('✅ تم إيقاف مشاركة الشاشة.');
         } else {
-            message.channel.send('❌ No active screen share to stop.');
+            message.channel.send('❌ لا يوجد بث شاشة فعال لإيقافه.');
         }
     }
 
 
-    // !leave: يخرج من الروم
+    // الأمر !leave: يخرج من الروم الصوتي
     if (content === '!leave') {
         if (!currentVoiceConnection) {
-            message.channel.send('❌ Bot is not connected to a voice channel.');
+            message.channel.send('❌ البوت غير متصل بروم صوتي.');
             return;
         }
         
@@ -182,15 +163,15 @@ client.on('messageCreate', async (message) => {
         }
 
         try {
-            // استخدام وظيفة الخروج من StreamClient
+            // استخدام وظيفة destroy للخروج من الروم
             await currentVoiceConnection.destroy();
             currentVoiceConnection = null;
 
-            message.channel.send('✅ Left the voice channel.');
-            console.log('✅ Left voice channel.');
+            message.channel.send('✅ تم الخروج من الروم الصوتي.');
+            console.log('✅ تم الخروج من الروم الصوتي.');
         } catch (error) {
-            console.error('Error leaving voice channel:', error.message);
-            message.channel.send('❌ An error occurred while trying to leave.');
+            console.error('خطأ أثناء الخروج من الروم:', error.message);
+            message.channel.send('❌ حدث خطأ أثناء محاولة الخروج من الروم.');
         }
     }
 });
